@@ -54,29 +54,54 @@ export async function POST(request: NextRequest) {
       }
 
       teamId = team.id;
-
-      const hashedPassword = await hashPassword(password);
-
-      const userCount = await prisma.user.count();
-
-      const role = userCount === 0 ? Role.ADMIN : Role.USER;
-
-      const user = await prisma.user.create({
-        data: {
-          name,
-          email,
-          password: hashedPassword,
-          role,
-          teamId,
-        },
-        include: {
-          team: true,
-        },
-      });
-
-      const token = generateToken(user.id);
-
-      const response = NextResponse.json;
     }
-  } catch (err) {}
+
+    const hashedPassword = await hashPassword(password);
+
+    const userCount = await prisma.user.count();
+
+    const role = userCount === 0 ? Role.ADMIN : Role.USER;
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role,
+        teamId,
+      },
+      include: {
+        team: true,
+      },
+    });
+
+    const token = generateToken(user.id);
+
+    const response = NextResponse.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        teamId: user.teamId,
+        team: user.team,
+        token,
+      },
+    });
+
+    response.cookies.set("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    return response;
+  } catch (err) {
+    console.log(err);
+    console.error("Registration failed");
+    return NextResponse.json({
+      error: "Registration failed",
+    });
+  }
 }
