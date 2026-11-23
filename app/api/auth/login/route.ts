@@ -1,7 +1,8 @@
-import { generateToken, hashPassword } from "@/app/lib/auth";
+import { generateToken, hashPassword, verifyPassword } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { Role } from "@/generated/prisma/enums";
 import { NextRequest, NextResponse } from "next/server";
+import { error } from "node:console";
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,36 +27,39 @@ export async function POST(request: NextRequest) {
     });
 
     if (!userFromDb) {
-      return NextResponse.json;
+      return NextResponse.json(
+        {
+          error: "Invalid Credentials",
+        },
+        {
+          status: 401,
+        },
+      );
     }
 
-    const hashedPassword = await hashPassword(password);
+    const isValidPassword = await verifyPassword(password, userFromDb.password);
 
-    const userCount = await prisma.user.count();
+    if (!isValidPassword) {
+      return NextResponse.json(
+        {
+          error: "Invalid credentials",
+        },
+        {
+          status: 401,
+        },
+      );
+    }
 
-    const role = userCount === 0 ? Role.ADMIN : Role.USER;
-
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        role,
-      },
-      include: {
-        team: true,
-      },
-    });
-
-    const token = generateToken(user.id);
+    const token = generateToken(userFromDb.id);
 
     const response = NextResponse.json({
       user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        teamId: user.teamId,
-        team: user.team,
+        id: userFromDb.id,
+        email: userFromDb.email,
+        name: userFromDb.name,
+        role: userFromDb.role,
+        teamId: userFromDb.teamId,
+        team: userFromDb.team,
         token,
       },
     });
@@ -70,7 +74,7 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (err) {
     console.log(err);
-    console.error("Registration failed");
+    console.error("login failed");
     return NextResponse.json({
       error: "Registration failed",
     });
